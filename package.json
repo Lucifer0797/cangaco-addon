@@ -1,0 +1,24 @@
+﻿{
+  "name": "dubra-addon",
+  "version": "1.0.0",
+  "description": "Dubra - Audio em portugues primeiro para Stremio e Nuvio",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "check": "node --check src/index.js && node --check src/utils/cache.js && node --check src/utils/filter.js && node --check src/utils/http.js && node --check src/utils/tmdb.js && node --check src/utils/config.js && node --check src/utils/health.js && node --check src/scrapers/torrentio.js && node --check src/scrapers/brazuca.js && node --check src/scrapers/indexer.js && node --check src/scrapers/betor.js && node --check src/scrapers/torrentsdb.js && node --check src/debrid/index.js && node --check src/configure.js && echo 'Todos os arquivos OK'"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "stremio-addon-sdk": "1.6.10",
+    "axios": "^1.6.7",
+    "axios-retry": "^4.0.0",
+    "cheerio": "^1.0.0",
+    "node-cache": "^5.1.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+
+
