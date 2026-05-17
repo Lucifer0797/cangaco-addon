@@ -118,11 +118,41 @@ function normalizeProwlarrDownloadUrl(base, rawUrl) {
 
 function isSeriesEpisodeMatch(name, type, season, episode) {
   if (type !== 'series' || !season || !episode) return true;
-  const ep = String(name || '').match(/S(\d{2})E(\d{2})/i);
-  if (ep) return parseInt(ep[1], 10) === season && parseInt(ep[2], 10) === episode;
-  const temp = String(name || '').match(/temporada\s*(\d+)/i);
-  if (temp && parseInt(temp[1], 10) !== season) return false;
-  return true;
+  const t = String(name || '');
+
+  const s = Number(season);
+  const e = Number(episode);
+  const sPad = String(s).padStart(2, '0');
+  const ePad = String(e).padStart(2, '0');
+
+  const exactA = new RegExp(`\\bS0?${s}E0?${e}\\b`, 'i').test(t);
+  const exactB = new RegExp(`\\b${s}\\s*x\\s*0?${e}\\b`, 'i').test(t);
+  const exactC = new RegExp(`\\bS${sPad}E${ePad}\\b`, 'i').test(t);
+  if (exactA || exactB || exactC) return true;
+
+  const hasAnyEpisodePattern = /\bS\d{1,2}E\d{1,2}\b/i.test(t) || /\b\d{1,2}\s*x\s*\d{1,2}\b/i.test(t);
+  if (hasAnyEpisodePattern) return false;
+
+  // Evita aceitar filme/resultado solto quando não houver marcação clara de episódio.
+  return false;
+}
+
+function normalizeImdbId(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  const m = s.match(/tt\d{5,10}/i);
+  return m ? m[0].toLowerCase() : null;
+}
+
+function extractItemImdbId(item) {
+  return normalizeImdbId(
+    item?.imdbId ||
+    item?.imdbid ||
+    item?.imdb ||
+    item?.imdbID ||
+    item?.infoUrl ||
+    item?.guid ||
+    item?.comments
+  );
 }
 
 async function fetchFromProwlarr(imdbId, type, season, episode, titleInfo, cfg) {
@@ -176,9 +206,13 @@ async function fetchFromProwlarr(imdbId, type, season, episode, titleInfo, cfg) 
         })
 
         const results = Array.isArray(res.data) ? res.data : [];
+        const expectedImdb = normalizeImdbId(imdbId);
         const streams = results
           .filter((item) => {
             const name = item?.title || '';
+            const itemImdb = extractItemImdbId(item);
+            if (expectedImdb && itemImdb && itemImdb !== expectedImdb) return false;
+
             const audioType = detectAudioType(name);
             const isPt = isPtBr(name);
             if (!(isPt || audioType === 'dubbed' || audioType === 'dual' || audioType === 'multi')) return false;
