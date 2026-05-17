@@ -1,65 +1,88 @@
-﻿# Dubra
+# Dubra
 
-Addon Stremio/Nuvio para torrents dublados e dual Ã¡udio PT-BR.
+Addon para Stremio/Nuvio focado em torrents com audio PT-BR (dublado/dual).
 
 ## Fontes ativas
 
-| Fonte | MÃ©todo | Cobertura |
-|-------|--------|-----------|
+| Fonte | Metodo | Cobertura |
+|---|---|---|
 | Torrentio Brazuca | API | Principal |
-| Brazuca Torrents | API | ConteÃºdo BR |
-| BeTor | Prowlarr (preferencial) + HTML fallback | ConteÃºdo BR |
+| Brazuca Torrents | API | Conteudo BR |
+| BeTor | Prowlarr (recomendado) | Conteudo BR |
 | Torrent Indexer | API | BluDV, Comando, Starck, TorrentDosFilmes, VacaTorrent |
-| TorrentsDB | API | Fallback secundÃ¡rio (fonte mista) |
+| TorrentsDB | API | Fallback secundario (fonte mista) |
 
-## Idioma (regra atual)
+## Regra de idioma
 
-- Fontes BR (Brazuca, BeTor, Indexer e derivados BR): sem filtro rÃ­gido.
-- Fontes mistas (Torrentio/TorrentsDB): com filtro PT-BR quando `Idioma original` estÃ¡ desligado.
+- Fontes BR (Brazuca, BeTor, Indexer e derivados BR): filtro mais leve.
+- Fontes mistas (Torrentio/TorrentsDB): filtro PT-BR quando `Idioma original` estiver desligado.
 
 ## Interface `/configure`
 
-- Qualidade/codec/fonte de vÃ­deo com ordenaÃ§Ã£o.
-- Fontes ativas.
-- Debrid.
-- Limites e timeout.
-- Status por fonte: `online`, `instÃ¡vel` e `offline`.
+- Preferencias de qualidade/codec/fonte de video com ordenacao
+- Fontes ativas
+- Debrid
+- Limites e timeout
+- Status por fonte: `online`, `instavel`, `offline`
 
-## InstalaÃ§Ã£o local
+## Rodar local
 
 ```bash
 npm install
 npm start
 ```
 
-Manifest:
+URLs locais:
 
-`http://localhost:7000/manifest.json`
+- Manifest: `http://localhost:7000/manifest.json`
+- Configuracao: `http://localhost:7000/configure`
+- Status: `http://localhost:7000/status`
 
-## Deploy no Render
+## Deploy (generico)
 
-1. Suba o repositÃ³rio no GitHub.
-2. Crie um Web Service no Render.
-3. Build command: `npm install`
-4. Start command: `npm start`
+Pode subir em qualquer plataforma que rode Node.js.
 
-## VariÃ¡veis de ambiente
+Configuracao minima:
 
-| VariÃ¡vel | DescriÃ§Ã£o | PadrÃ£o |
-|----------|-----------|--------|
-| `PORT` | Porta do servidor | `7000` |
-| `TMDB_API_KEY` | API key do TMDB (opcional) | â€” |
-| `BRAZUCA_URL` | URL do Brazuca Torrents | URL padrÃ£o |
-| `TORRENT_INDEXER_URL` | URL do torrent-indexer | InstÃ¢ncia pÃºblica |
+- Build: `npm install`
+- Start: `npm start`
+- Porta: usar variavel `PORT` da plataforma
+
+## Deploy no Railway (recomendado no free)
+
+1. Suba o repositorio no GitHub.
+2. Crie um servico Web no Railway para o Dubra.
+3. Build: `npm install`
+4. Start: `npm start`
+5. Configure variaveis de ambiente (secao abaixo).
+
+## Prowlarr (opcional, recomendado para BeTor)
+
+Se quiser usar BeTor via Prowlarr:
+
+1. Suba o Prowlarr em servico separado.
+2. Configure volume persistente montado em `/config`.
+3. Adicione o indexador `Catalogo BeTor`.
+4. No Dubra, configure:
+   - `PROWLARR_URL`
+   - `PROWLARR_API_KEY`
+   - `PROWLARR_INDEXER_ID` (ex.: `1`)
+
+## Variaveis de ambiente (Dubra)
+
+| Variavel | Descricao | Padrao |
+|---|---|---|
+| `PORT` | Porta HTTP do servidor | `7000` |
+| `BRAZUCA_URL` | URL da fonte Brazuca | padrao interno |
+| `TORRENT_INDEXER_URL` | URL do Torrent Indexer | instancia publica |
 | `TORRENTSDB_URL` | URL do TorrentsDB | `https://torrentsdb.com` |
-| `PROWLARR_URL` | URL do Prowlarr (opcional) | â€” |
-| `PROWLARR_API_KEY` | API Key do Prowlarr (opcional) | â€” |
-| `PROWLARR_INDEXER_ID` | ID do indexador BeTor no Prowlarr (opcional) | â€” |
-| `RENDER_EXTERNAL_URL` | URL pÃºblica no Render | â€” |
+| `PROWLARR_URL` | URL publica do Prowlarr | vazio |
+| `PROWLARR_API_KEY` | API key do Prowlarr | vazio |
+| `PROWLARR_INDEXER_ID` | ID do indexador no Prowlarr | vazio |
+| `TMDB_API_KEY` | Chave TMDB (opcional) | vazio |
 
-## VerificaÃ§Ã£o
+## Verificacao
 
 ```bash
 npm run check
 ```
-
