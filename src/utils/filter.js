@@ -132,8 +132,37 @@ function extractSource(title) {
 
 function extractInfoHash(magnet) {
   if (!magnet) return null;
-  const m = magnet.match(/xt=urn:btih:([a-f0-9]{40})/i);
-  return m ? m[1].toLowerCase() : null;
+  const m = magnet.match(/xt=urn:btih:([a-z0-9]{32,40})/i);
+  if (!m) return null;
+  const raw = String(m[1] || '').trim();
+
+  // Hex tradicional (40 chars)
+  if (/^[a-f0-9]{40}$/i.test(raw)) return raw.toLowerCase();
+
+  // Base32 (comum em alguns indexadores): converte para hex.
+  if (/^[a-z2-7]{32}$/i.test(raw)) {
+    const hex = base32ToHex(raw.toUpperCase());
+    return hex && hex.length === 40 ? hex : null;
+  }
+
+  return null;
+}
+
+function base32ToHex(base32) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const ch of String(base32 || '')) {
+    const idx = alphabet.indexOf(ch);
+    if (idx === -1) return null;
+    bits += idx.toString(2).padStart(5, '0');
+  }
+
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) {
+    bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  }
+  if (!bytes.length) return null;
+  return Buffer.from(bytes).toString('hex');
 }
 
 function extractSeeds(text) {
@@ -307,7 +336,7 @@ function formatStreamName(title, audioType) {
 
 function formatStream({ title, infoHash, magnet, source, seeds, size, audioType, fileIdx, url, behaviorHints, filename }) {
   const hash = infoHash || extractInfoHash(magnet);
-  if (!hash) return null;
+  if (!hash && !url) return null;
 
   const type = audioType || detectAudioType(title || '') || 'dubbed';
   const icon = SOURCE_ICONS[source] || '\uD83C\uDF10';
@@ -323,7 +352,7 @@ function formatStream({ title, infoHash, magnet, source, seeds, size, audioType,
   return {
     name:        formatStreamName(title || '', type),
     description: desc,
-    infoHash:    hash,
+    ...(hash ? { infoHash: hash } : {}),
     ...(typeof fileIdx === 'number' ? { fileIdx } : {}),
     ...(url ? { url } : {}),
     behaviorHints: {
@@ -347,11 +376,21 @@ function formatStream({ title, infoHash, magnet, source, seeds, size, audioType,
 function deduplicate(streams, opts) {
   const dedupBySize = opts?.dedupBySize !== false;
   const byHash = new Set();
+  const byUrl = new Set();
   const bySize = new Set();
   return streams.filter(s => {
-    if (!s || !s.infoHash) return false;
-    if (byHash.has(s.infoHash)) return false;
-    byHash.add(s.infoHash);
+    if (!s) return false;
+
+    if (s.infoHash) {
+      if (byHash.has(s.infoHash)) return false;
+      byHash.add(s.infoHash);
+    } else if (s.url) {
+      if (byUrl.has(s.url)) return false;
+      byUrl.add(s.url);
+    } else {
+      return false;
+    }
+
     if (dedupBySize && s._size) {
       if (bySize.has(s._size)) return false;
       bySize.add(s._size);

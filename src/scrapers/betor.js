@@ -71,7 +71,7 @@ function extractMagnetFromWrappedUrl(raw) {
     for (const c of candidates) {
       const decoded = safeDecode(c);
       if (String(decoded).startsWith('magnet:')) return decoded;
-      const btih = String(decoded).match(/btih:([a-f0-9]{32,40})/i);
+      const btih = String(decoded).match(/btih:([a-z0-9]{32,40})/i);
       if (btih) {
         const dn = encodeURIComponent('torrent');
         return 'magnet:?xt=urn:btih:' + btih[1] + '&dn=' + dn;
@@ -88,6 +88,31 @@ function safeDecode(val) {
     return decodeURIComponent(String(val || ''));
   } catch {
     return String(val || '');
+  }
+}
+
+function toAbsoluteUrl(base, rawUrl) {
+  const raw = String(rawUrl || '').trim();
+  if (!raw) return '';
+  try {
+    return new URL(raw, base + '/').toString();
+  } catch {
+    return raw;
+  }
+}
+
+function normalizeProwlarrDownloadUrl(base, rawUrl) {
+  const abs = toAbsoluteUrl(base, rawUrl);
+  if (!abs) return null;
+  try {
+    const u = new URL(abs);
+    // Se for endpoint do Prowlarr, garante apikey para o Stremio conseguir baixar.
+    if (u.pathname.startsWith('/api/v1/indexer/') && !u.searchParams.get('apikey')) {
+      u.searchParams.set('apikey', PROWLARR_API_KEY);
+    }
+    return u.toString();
+  } catch {
+    return abs;
   }
 }
 
@@ -162,9 +187,11 @@ async function fetchFromProwlarr(imdbId, type, season, episode, titleInfo, cfg) 
           .map((item) => {
             const name = item?.title || '';
             const magnet = normalizeProwlarrMagnet(item);
-            if (!magnet) return null;
+            const url = normalizeProwlarrDownloadUrl(base, item?.downloadUrl || item?.guid);
+            if (!magnet && !url) return null;
             return formatStream({
               title: name,
+              url,
               magnet,
               source: SOURCE,
               seeds: Number.isFinite(Number(item?.seeders)) ? Number(item.seeders) : null,
