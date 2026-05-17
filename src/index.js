@@ -14,6 +14,7 @@ const { parseConfig } = require('./utils/config');
 const {
   isPtBrStream, passesQualityFilter, passesCodecFilter, passesSrcFilter,
   passesEpisodeFilter, deduplicate, applyScores, sortAndClean, isLikelyPtBrFromTrustedSource, isClearlyNonPtBr,
+  extractResolution, extractCodec, extractSource,
 } = require('./utils/filter');
 const { enrichWithDebrid }  = require('./debrid');
 const { startMonitor, getStatus } = require('./utils/health');
@@ -87,6 +88,71 @@ function applyQualityBehavior(streams, cfg) {
   if (mode === 'strict') return preferred;
   if (mode === 'fallback') return preferred.length ? preferred : streams;
   return streams;
+}
+
+function cleanupFormatterOutput(text) {
+  return String(text || '')
+    // remove blocos não resolvidos inteiros
+    .replace(/\{[^{}\n]*\}/g, '')
+    // remove sobras comuns de variáveis AIO quebradas
+    .replace(/\{stream\.[^\s\n]*/g, '')
+    .replace(/\{service\.[^\s\n]*/g, '')
+    .replace(/\{addon\.[^\s\n]*/g, '')
+    // remove expressões AIO "soltas" sem chaves, ex: stream.title::exists["..."||"..."]
+    .replace(/\b(?:stream|service|addon)\.[a-zA-Z0-9_.]+::[^\n]+/g, '')
+    // normaliza espaços
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function applyFormatter(streams, cfg) {
+  const primaryLangFlag = (title) => {
+    const t = String(title || '').toLowerCase();
+    if (/\bpt-?br\b|dublado|portuguese|brazil/i.test(t)) return '🇧🇷';
+    if (/\beng(lish)?\b|\busa?\b/i.test(t)) return '🇺🇸';
+    if (/\bjap(anese)?\b|\bjpn?\b/i.test(t)) return '🇯🇵';
+    if (/\besp|español|spanish/i.test(t)) return '🇪🇸';
+    if (/\bita(liano)?\b/i.test(t)) return '🇮🇹';
+    return '🌐';
+  };
+
+  const cleanTitle = (raw) => {
+    return String(raw || '')
+      .replace(/\r/g, '')
+      .split('\n')[0]
+      .replace(/[•|]/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  };
+
+  return streams.map((s) => {
+    const title = cleanTitle(s._title || s.name || '');
+    const source = String(s._source || 'Fonte');
+    const res = (extractResolution(title) || '').toUpperCase();
+    const srcRaw = extractSource(title) || '';
+    const src = srcRaw ? srcRaw.toUpperCase().replace('WEBDL', 'WEB-DL') : '';
+    const codecRaw = extractCodec(title) || '';
+    const codec = codecRaw === 'h265' ? 'HEVC' : (codecRaw ? codecRaw.toUpperCase() : '');
+    const lang = primaryLangFlag(title);
+    const size = String(s._size || '').trim();
+    const seeds = typeof s._seeds === 'number' && Number.isFinite(s._seeds) ? s._seeds : null;
+
+    const nameParts = [res, src, codec].filter(Boolean);
+    const nextName = cleanupFormatterOutput(nameParts.join(' ')) || 'SEM INFO';
+
+    const line2 = [
+      lang,
+      size || null,
+      (seeds != null && seeds > 0) ? `${seeds} seeds` : null,
+    ].filter(Boolean).join(' • ');
+
+    const nextDesc = cleanupFormatterOutput(
+      [source, line2, title.slice(0, 120)].filter(Boolean).join('\n')
+    );
+
+    return { ...s, name: nextName, description: nextDesc };
+  });
 }
 
 async function handleStream(type, id, cfg) {
@@ -238,6 +304,7 @@ async function fetchAll(imdbId, type, season, episode, titleInfo, cfg) {
   // Deduplica, pontua e ordena
   all = cfg.dedup === false ? all : deduplicate(all, { dedupBySize: cfg.dedupBySize !== false });
   all = applyScores(all, cfg);
+  all = applyFormatter(all, cfg);
   all = sortAndClean(all);
 
   // Limite total
@@ -278,11 +345,11 @@ const HOST    = process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + PORT;
 
 const app = express();
 app.set('trust proxy', true);
-const addonInterface = builder.getInterface();
+app.disable('x-powered-by');
 
 // â”€â”€â”€ Middleware â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-app.use(express.json());
+app.use(express.json({ limit: '16kb' }));
 
 // CORS â€” requerido por Stremio
 app.use((req, res, next) => {
@@ -292,6 +359,35 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
+
+function isLocalReq(req) {
+  const ip = String(req.ip || req.connection?.remoteAddress || '');
+  const host = String(req.get('host') || '').toLowerCase();
+  return ip.includes('127.0.0.1') || ip.includes('::1') || host.startsWith('localhost') || host.startsWith('127.0.0.1');
+}
+
+function diagnosticsEnabled(req) {
+  if (String(process.env.ENABLE_DIAGNOSTICS || '').toLowerCase() === 'true') return true;
+  return isLocalReq(req);
+}
+
+// Limite simples por IP para endpoints sensíveis.
+const rlMap = new Map();
+function rateLimit(windowMs, maxHits) {
+  return (req, res, next) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const key = req.path + '|' + ip;
+    const now = Date.now();
+    const prev = rlMap.get(key);
+    if (!prev || now > prev.resetAt) {
+      rlMap.set(key, { hits: 1, resetAt: now + windowMs });
+      return next();
+    }
+    prev.hits += 1;
+    if (prev.hits > maxHits) return res.status(429).json({ ok: false, error: 'rate_limited' });
+    return next();
+  };
+}
 
 // â”€â”€â”€ Rotas Stremio (manifest.json, stream/:type/:id.json) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -366,26 +462,12 @@ app.get('/status', (req, res) => {
   });
 });
 
-// Teste de token debrid
-app.get('/debrid-test', async (req, res) => {
-  const { service, key } = req.query;
-  if (!service || !key) return res.json({ ok: false });
-  try {
-    const { enrichWithDebrid } = require('./debrid');
-    const result = await enrichWithDebrid(
-      [{ infoHash: '0'.repeat(40), name: 'test', description: '', behaviorHints: {} }],
-      { service, apiKey: key }
-    );
-    res.json({ ok: !!result[0]?.url });
-  } catch {
-    res.json({ ok: false });
-  }
-});
-
-app.post('/debrid-test', async (req, res) => {
+app.post('/debrid-test', rateLimit(60 * 1000, 20), async (req, res) => {
+  if (!diagnosticsEnabled(req)) return res.status(404).json({ ok: false });
   const service = req.body?.service;
   const key = req.body?.key;
   if (!service || !key) return res.json({ ok: false });
+  if (String(key).length > 512) return res.json({ ok: false });
   try {
     const { enrichWithDebrid } = require('./debrid');
     const result = await enrichWithDebrid(
@@ -398,17 +480,20 @@ app.post('/debrid-test', async (req, res) => {
   }
 });
 
-app.post('/debrid-token', (req, res) => {
+app.post('/debrid-token', rateLimit(60 * 1000, 40), (req, res) => {
   const service = req.body?.service;
   const key = req.body?.key;
   if (!service || !key) return res.json({ ok: false });
   if (!['rd', 'torbox', 'ad', 'pm'].includes(service)) return res.json({ ok: false });
+  if (String(key).length > 512) return res.json({ ok: false });
 
   const out = tokenStore.put(service, key);
+  if (!out) return res.json({ ok: false });
   res.json({ ok: true, ref: out.ref, ttlSec: out.ttlSec });
 });
 
 app.get('/scrapers-test', async (req, res) => {
+  if (!diagnosticsEnabled(req)) return res.status(404).json({ ok: false });
   const imdbId = req.query.imdb || 'tt0133093';
   const type = req.query.type === 'series' ? 'series' : 'movie';
   const season = req.query.season ? parseInt(req.query.season, 10) : null;

@@ -10,8 +10,8 @@
  */
 
 const DEFAULTS = {
-  quality:  ['4k', '1080p', '720p'],
-  qualityOrder: ['1080p', '4k', '720p'],
+  quality:  ['4k', '1440p', '1080p', '720p'],
+  qualityOrder: ['1080p', '1440p', '4k', '720p'],
   behavior: 'all',           // all | fallback | strict
   packMode: 'smart',         // strict | smart
   sortBy: 'balanced',        // balanced | quality | seeds | size_asc | size_desc
@@ -30,6 +30,9 @@ const DEFAULTS = {
     torrentsdb:false,
   },
   allowOriginal: false,
+  formatterPreset: 'compact', // compact | detailed | technical | custom
+  formatterName: '',
+  formatterDesc: '',
   cache:       true,
   prefetch:    false,
   dedup:       true,
@@ -145,6 +148,25 @@ function parseConfig(urlPath) {
       if (vals.includes('dedup0')) cfg.dedup = false;
       if (vals.includes('dedupsize0')) cfg.dedupBySize = false;
       if (vals.includes('original1')) cfg.allowOriginal = true;
+      continue;
+    }
+
+    // fmt~compact|detailed|technical|custom
+    if (seg.startsWith('fmt~') || seg.startsWith('fmt-')) {
+      const v = seg.slice(4);
+      if (['compact', 'detailed', 'technical', 'custom'].includes(v)) cfg.formatterPreset = v;
+      continue;
+    }
+
+    // fmtn~<urlencoded-template>
+    if (seg.startsWith('fmtn~') || seg.startsWith('fmtn-')) {
+      try { cfg.formatterName = decodeURIComponent(seg.slice(5)); } catch {}
+      continue;
+    }
+
+    // fmtd~<urlencoded-template>
+    if (seg.startsWith('fmtd~') || seg.startsWith('fmtd-')) {
+      try { cfg.formatterDesc = decodeURIComponent(seg.slice(5)); } catch {}
       continue;
     }
   }

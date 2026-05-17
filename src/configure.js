@@ -193,6 +193,7 @@ function configurePage(baseUrl) {
       const GROUPS = {
         res: { items: [
           { k: "4k", label: "4K", sub: "2160p", on: true },
+          { k: "1440p", label: "2K", sub: "1440p", on: true },
           { k: "1080p", label: "1080p", sub: "Full HD", on: true },
           { k: "720p", label: "720p", sub: "HD", on: true },
           { k: "480p", label: "480p", sub: "SD", on: false },
@@ -291,6 +292,65 @@ function configurePage(baseUrl) {
           });
           el.appendChild(div);
         });
+      }
+
+      function renderSimpleTemplate(tpl, ctx) {
+        return String(tpl || '').replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => String(ctx[key] ?? '')).replace(/\s{2,}/g, ' ').trim();
+      }
+
+      function renderAioLikeTemplate(tpl, ctx) {
+        const text = String(tpl || "");
+        // Preview local para AIO avançado: retorna visão simplificada limpa
+        // em vez de tentar interpretar toda a DSL.
+        if (text.includes("::")) {
+          return [ctx.source, ctx.size + " • " + ctx.seeds + " seeds • " + ctx.lang, ctx.title].join("\\n");
+        }
+        return text;
+      }
+
+      function renderFormatterPreview() {
+        const preset = document.getElementById("sel-fmt").value;
+        const ctx = {
+          source: "Torrentio",
+          title: "Jujutsu Kaisen S02E03 WEB-DL 1080p",
+          res: "1080P",
+          src: "WEB-DL",
+          codec: "HEVC",
+          lang: "PT-BR",
+          size: "1.8 GB",
+          seeds: "92",
+        };
+
+        const nameTplByPreset = {
+          compact: "{res} {src} {codec}",
+          detailed: "{res} {src} {codec} {lang}",
+          technical: "{res} {src} {codec} S:{seeds} SZ:{size}",
+        };
+        const descTplByPreset = {
+          compact: "{source}\\n{size} • {seeds} seeds\\n{title}",
+          detailed: "{source}\\n{size} • {seeds} seeds • {lang}\\n{title}",
+          technical: "{source}\\nRES:{res} SRC:{src} CODEC:{codec}\\n{size} • {seeds} seeds\\n{title}",
+        };
+
+        const nameTpl = preset === "custom"
+          ? (document.getElementById("fmt-name").value.trim() || "{res} {src} {codec}")
+          : (nameTplByPreset[preset] || nameTplByPreset.compact);
+        const descTpl = preset === "custom"
+          ? (document.getElementById("fmt-desc").value.trim() || "{source}\\n{size} • {seeds} seeds\\n{title}")
+          : (descTplByPreset[preset] || descTplByPreset.compact);
+
+        const isAioLike = preset === "custom" && (nameTpl.includes("::") || descTpl.includes("::"));
+        if (isAioLike) {
+          document.getElementById("fmt-preview-name").textContent = "Preview avançado";
+          document.getElementById("fmt-preview-desc").textContent =
+            "Template AIO-like detectado.\\nNão é possível exibir preview fiel aqui.\\nA renderização final acontece no stream real.";
+          return;
+        }
+
+        const previewName = renderSimpleTemplate(nameTpl, ctx) || "Preview";
+        const previewDesc = renderSimpleTemplate(descTpl, ctx) || "Preview";
+        document.getElementById("fmt-preview-name").textContent = previewName;
+        document.getElementById("fmt-preview-desc").textContent = previewDesc;
       }
 
       function updateHealth() {

@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "dubra-addon",
   "version": "1.0.0",
   "description": "Dubra - Audio em portugues primeiro para Stremio e Nuvio",
@@ -17,9 +17,8 @@
     "node-cache": "^5.1.2"
   },
   "engines": {
-    "node": "20.18.1"
+    "node": ">=18"
   }
 }
-
 
 

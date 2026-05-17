@@ -14,13 +14,14 @@ const FOREIGN_AUDIO_ONLY_REGEX = /(\beng(lish)?\b|\bita(liano)?\b|\bjap(anese)?\
 
 const RESOLUTION_MAP = {
   '2160p': '4k', '4k': '4k', 'uhd': '4k',
+  '1440p': '1440p', '2k': '1440p', 'qhd': '1440p',
   '1080p': '1080p', 'fhd': '1080p',
   '720p': '720p', 'hd': '720p',
   '480p': '480p', 'sd': '480p',
   '360p': '360p',
 };
 
-const RESOLUTION_SCORE = { '4k': 5, '1080p': 4, '720p': 3, '480p': 2, '360p': 1 };
+const RESOLUTION_SCORE = { '4k': 6, '1440p': 5, '1080p': 4, '720p': 3, '480p': 2, '360p': 1 };
 
 const CODEC_MAP = {
   'hevc': 'h265', 'h265': 'h265', 'x265': 'h265',
@@ -108,7 +109,7 @@ function detectAudioType(text) {
 // â”€â”€â”€ ExtraÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function extractResolution(title) {
-  const m = (title || '').match(/\b(2160p|4K|UHD|1080p|FHD|720p|480p|360p)\b/i);
+  const m = (title || '').match(/\b(2160p|4K|UHD|1440p|2K|QHD|1080p|FHD|720p|480p|360p)\b/i);
   if (!m) return null;
   return RESOLUTION_MAP[m[1].toLowerCase()] || null;
 }
@@ -136,8 +137,21 @@ function extractInfoHash(magnet) {
 }
 
 function extractSeeds(text) {
-  const m = (text || '').match(/ðŸ‘¤\s*(\d+)/);
-  return m ? parseInt(m[1]) : null;
+  const t = String(text || '');
+
+  // padrão explícito: "49 seeds" / "49 seeders"
+  let m = t.match(/\b(\d{1,6})\s*(seeds?|seeders?)\b/i);
+  if (m) return parseInt(m[1], 10);
+
+  // padrão com ícone de pessoa: "👤 49", "🧑49", etc.
+  m = t.match(/[👤🧑👥]\s*(\d{1,6})/u);
+  if (m) return parseInt(m[1], 10);
+
+  // fallback: linha que contém "seed" em qualquer parte
+  m = t.match(/(?:^|\n).*?(\d{1,6}).*?seed.*?(?:$|\n)/i);
+  if (m) return parseInt(m[1], 10);
+
+  return null;
 }
 
 function extractSize(text) {
@@ -247,20 +261,36 @@ function passesSrcFilter(title, cfg) {
 
 // â”€â”€â”€ FormataÃ§Ã£o AIOStreams â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+const SOURCE_ICONS = {
+  Torrentio: 'ðŸŒ', BrazucaTorrents: 'ðŸ‡§ðŸ‡·', BluDV: 'ðŸ“€',
+  Comando: 'ðŸ“¡', RedeTorrent: 'ðŸ•¸ï¸', StarckFilmes: 'â­',
+  TorrentDosFilmes: 'ðŸŽ¬', VacaTorrent: 'ðŸ„',
+};
+
 function inferLanguageTags(text) {
   const t = String(text || '');
   const tags = [];
-  const push = (tag) => { if (!tags.includes(tag)) tags.push(tag); };
+  const push = (f) => { if (!tags.includes(f)) tags.push(f); };
 
-  if (/(pt-br|ptbr|portuguese|dublado|dual\s*portuguese)/i.test(t)) push('BR');
-  if (/(english|eng\b|en\b)/i.test(t)) push('US');
+  if (/(pt-br|ptbr|portuguese|dublado|dual\s*portuguese)/i.test(t)) push('PT-BR');
+  if (/(english|eng\b|en\b)/i.test(t)) push('EN');
   if (/(japanese|jap\b|jp\b|anime)/i.test(t)) push('JP');
-  if (/(spanish|espanol|espa[nñ]ol|latino)/i.test(t)) push('ES');
-  if (/(french|francais|fran[cç]ais|vf\b)/i.test(t)) push('FR');
+  if (/(spanish|espanol|espaÃ±ol|latino)/i.test(t)) push('ES');
+  if (/(french|francais|franÃ§ais|vf\b)/i.test(t)) push('FR');
   if (/(italian|italiano)/i.test(t)) push('IT');
   if (/(german|deutsch)/i.test(t)) push('DE');
 
   return tags;
+}
+
+function cleanDisplayTitle(title) {
+  return String(title || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\[[^\]]{1,20}\]/g, ' ')
+    .replace(/\([^)]{1,20}\)/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 90);
 }
 
 function formatStreamName(title, audioType) {
@@ -280,14 +310,14 @@ function formatStream({ title, infoHash, magnet, source, seeds, size, audioType,
   if (!hash) return null;
 
   const type = audioType || detectAudioType(title || '') || 'dubbed';
-  const tags = inferLanguageTags(title || '');
+  const icon = SOURCE_ICONS[source] || '\uD83C\uDF10';
+  const langs = inferLanguageTags(title || '');
+  const cleanTitle = cleanDisplayTitle(title || '');
 
   const desc = [
-    source,
-    size ? size : '',
-    seeds ? (seeds + ' seeds') : '',
-    tags.length ? tags.join(' ') : '',
-    (title || '').substring(0, 90),
+    icon + ' ' + source,
+    [size ? size : '', seeds ? (seeds + ' seeds') : '', langs.length ? langs.join(' | ') : ''].filter(Boolean).join(' • '),
+    cleanTitle,
   ].filter(Boolean).join('\n');
 
   return {

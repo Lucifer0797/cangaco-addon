@@ -8,14 +8,14 @@ const { http } = require('./http');
 const cache    = require('./cache');
 
 const BASE    = 'https://api.themoviedb.org/3';
-const API_KEY = process.env.TMDB_API_KEY || '';
+let apiKey = process.env.TMDB_API_KEY || '';
 let tmdbDisabled = false;
 
 async function getTitleInfo(imdbId, type) {
   const cached = cache.getTmdb(imdbId);
   if (cached) return cached;
 
-  if (!API_KEY || tmdbDisabled) {
+  if (!apiKey || tmdbDisabled) {
     const fb = fallback(imdbId);
     cache.setTmdb(imdbId, fb);
     return fb;
@@ -24,7 +24,7 @@ async function getTitleInfo(imdbId, type) {
   try {
     const mediaType = type === 'series' ? 'tv' : 'movie';
     const params = { external_source: 'imdb_id', language: 'pt-BR' };
-    if (API_KEY) params.api_key = API_KEY;
+    if (apiKey) params.api_key = apiKey;
 
     const res = await http.get(BASE + '/find/' + imdbId, { params, timeout: 6000 });
     const results = res.data[mediaType + '_results'] || [];
@@ -65,4 +65,27 @@ function fallback(imdbId) {
   return { imdbId, title: '', titlePtBr: '', originalTitle: '', year: 0, status: '' };
 }
 
-module.exports = { getTitleInfo, isActive };
+function setApiKey(nextKey) {
+  apiKey = String(nextKey || '').trim();
+  tmdbDisabled = !apiKey;
+}
+
+function hasApiKey() {
+  return !!apiKey;
+}
+
+async function testApiKey(nextKey) {
+  const key = String(nextKey || '').trim();
+  if (!key) return { ok: false, reason: 'empty' };
+  try {
+    const res = await http.get(BASE + '/configuration', {
+      params: { api_key: key },
+      timeout: 6000,
+    });
+    return { ok: !!res.data?.images };
+  } catch (err) {
+    return { ok: false, reason: err.response?.status ? String(err.response.status) : 'request_failed' };
+  }
+}
+
+module.exports = { getTitleInfo, isActive, setApiKey, hasApiKey, testApiKey };
