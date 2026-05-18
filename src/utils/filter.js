@@ -337,6 +337,7 @@ function formatStreamName(title, audioType) {
 function formatStream({ title, infoHash, magnet, source, seeds, size, audioType, fileIdx, url, behaviorHints, filename }) {
   const hash = infoHash || extractInfoHash(magnet);
   if (!hash && !url) return null;
+  const safeUrl = hash ? null : url;
 
   const type = audioType || detectAudioType(title || '') || 'dubbed';
   const icon = SOURCE_ICONS[source] || '\uD83C\uDF10';
@@ -354,7 +355,7 @@ function formatStream({ title, infoHash, magnet, source, seeds, size, audioType,
     description: desc,
     ...(hash ? { infoHash: hash } : {}),
     ...(typeof fileIdx === 'number' ? { fileIdx } : {}),
-    ...(url ? { url } : {}),
+    ...(safeUrl ? { url: safeUrl } : {}),
     behaviorHints: {
       bingeGroup:  'dubra-' + source,
       notWebReady: true,
