@@ -9,7 +9,7 @@ const { addonBuilder } = require('stremio-addon-sdk');
 
 const cache           = require('./utils/cache');
 const { getTitleInfo, isActive } = require('./utils/tmdb');
-const { raceAll }     = require('./utils/http');
+const { raceAll, http }     = require('./utils/http');
 const { parseConfig } = require('./utils/config');
 const {
   isPtBrStream, passesQualityFilter, passesCodecFilter, passesSrcFilter,
@@ -256,7 +256,7 @@ async function fetchAll(imdbId, type, season, episode, titleInfo, cfg) {
     });
   }
 
-  // Para episÃ³dios, nÃ£o aceita pack de temporada e sÃ³ mantÃ©m episÃ³dio compatÃ­vel.
+  // Para episÃ³dios, exige fileIdx para aumentar compatibilidade de playback.
   if (type === 'series' && season && episode) {
     const beforeEpisodeFilter = all.length;
     const episodeFiltered = all.filter(s => {
@@ -264,33 +264,10 @@ async function fetchAll(imdbId, type, season, episode, titleInfo, cfg) {
       const allowPack = cfg.packMode === 'smart' && typeof s.fileIdx === 'number';
       return passesEpisodeFilter(title, season, episode, { allowPack });
     });
-
-    // Hard guard: para episÃ³dio, sem fileIdx sÃ³ passa se tiver SxE explÃ­cito em algum campo.
-    const s = Number(season);
-    const e = Number(episode);
-    const sxea = new RegExp(`\\bs0?${s}\\s*e0?${e}\\b`, 'i');
-    const sxeb = new RegExp(`\\b${s}\\s*x\\s*0?${e}\\b`, 'i');
-    const sxec = new RegExp(`\\bs${String(s).padStart(2, '0')}e${String(e).padStart(2, '0')}\\b`, 'i');
-    all = episodeFiltered.filter(stream => {
-      if (typeof stream.fileIdx === 'number') return true;
-      const blob = [
-        stream._title || '',
-        stream.name || '',
-        stream.description || '',
-        stream.filename || '',
-        stream.behaviorHints?.filename || '',
-      ].join(' ');
-      return sxea.test(blob) || sxeb.test(blob) || sxec.test(blob);
-    });
-
-    // Fallback de robustez: se hard-guard zerar tudo, usa o filtro de episÃ³dio sem hard-guard.
-    if (!all.length && episodeFiltered.length) {
-      console.log('[Dubra] Hard-guard zerou resultados; aplicando fallback do filtro de episÃ³dio.');
-      all = episodeFiltered;
-    }
+    all = episodeFiltered.filter(stream => typeof stream.fileIdx === 'number');
 
     if (beforeEpisodeFilter !== all.length) {
-      console.log('[Dubra] Filtro de episÃ³dio removeu', (beforeEpisodeFilter - all.length), 'itens');
+      console.log('[Dubra] Filtro fileIdx (series) removeu', (beforeEpisodeFilter - all.length), 'itens');
     }
   }
 
@@ -393,6 +370,79 @@ function rateLimit(windowMs, maxHits) {
     if (prev.hits > maxHits) return res.status(429).json({ ok: false, error: 'rate_limited' });
     return next();
   };
+}
+
+function xmlEscape(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function torznabCapsXml() {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<caps>
+  <server version="1.0" title="ThepirataFilmes (via Dubra)" />
+  <limits max="100" default="50" />
+  <searching>
+    <search available="yes" supportedParams="q" />
+    <tv-search available="yes" supportedParams="q,imdbid,tmdbid,season,ep" />
+    <movie-search available="yes" supportedParams="q,imdbid,tmdbid" />
+  </searching>
+  <categories>
+    <category id="2000" name="Movies" />
+    <category id="5000" name="TV" />
+  </categories>
+</caps>`;
+}
+
+function toTorznabCategoryId(rawCategory) {
+  const c = String(rawCategory || '').toLowerCase();
+  if (c.includes('tv') || c.includes('series')) return '5000';
+  return '2000';
+}
+
+function torznabRssXml(items) {
+  const itemXml = items.map((it) => {
+    const title = xmlEscape(it.title || 'Sem titulo');
+    const guid = xmlEscape(it.details || it.download || it.title || '');
+    const comments = xmlEscape(it.details || '');
+    const link = xmlEscape(it.download || it.details || '');
+    const pubDate = new Date().toUTCString();
+    const size = Number(it.size || 0);
+    const seeders = Number(it.seeders || 0);
+    const peers = Number(it.peers || 0);
+    const categoryId = toTorznabCategoryId(it.category);
+    const imdb = String(it.imdbid || '').replace(/^tt/i, '');
+
+    return `
+    <item>
+      <title>${title}</title>
+      <guid isPermaLink="false">${guid}</guid>
+      <comments>${comments}</comments>
+      <pubDate>${pubDate}</pubDate>
+      <size>${Number.isFinite(size) && size > 0 ? size : 0}</size>
+      <link>${link}</link>
+      <enclosure url="${link}" length="${Number.isFinite(size) && size > 0 ? size : 0}" type="application/x-bittorrent" />
+      <torznab:attr name="category" value="${categoryId}" />
+      <torznab:attr name="seeders" value="${Number.isFinite(seeders) ? seeders : 0}" />
+      <torznab:attr name="peers" value="${Number.isFinite(peers) ? peers : 0}" />
+      ${imdb ? `<torznab:attr name="imdbid" value="${xmlEscape(imdb)}" />` : ''}
+    </item>`;
+  }).join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:torznab="http://torznab.com/schemas/2015/feed">
+  <channel>
+    <title>ThepirataFilmes (via Dubra)</title>
+    <description>Torznab feed gerado pelo Dubra</description>
+    <link>https://www.thepiratafilmes.online/</link>
+    <atom:link href="/torznab/thepirata/api" rel="self" type="application/rss+xml" />
+    ${itemXml}
+  </channel>
+</rss>`;
 }
 
 // â”€â”€â”€ Rotas Stremio (manifest.json, stream/:type/:id.json) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -534,6 +584,53 @@ app.get(/^(?:\/(.*))?\/scrapers-test$/, async (req, res) => {
     testedAt: new Date().toISOString(),
     results: out,
   });
+});
+
+// Torznab para ThepirataFilmes (uso no Prowlarr Generic Torznab)
+app.get('/torznab/thepirata/api', async (req, res) => {
+  try {
+    const mode = String(req.query.t || 'caps').toLowerCase();
+
+    if (mode === 'caps') {
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      return res.status(200).send(torznabCapsXml());
+    }
+
+    if (!['search', 'movie', 'movie-search', 'tvsearch', 'tv-search'].includes(mode)) {
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      return res.status(400).send(`<?xml version="1.0" encoding="UTF-8"?><error code="100" description="Unsupported mode" />`);
+    }
+
+    const q = String(req.query.q || '').trim();
+    const imdbid = String(req.query.imdbid || '').trim();
+    const tmdbid = String(req.query.tmdbid || '').trim();
+    const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit || '50'), 10) || 50));
+    const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+
+    const upstream = await http.get('https://www.thepiratafilmes.online/api/search', {
+      timeout: 12000,
+      headers: { Accept: 'application/json' },
+      params: { q, imdbid, tmdbid, limit, offset },
+    });
+
+    const rows = Array.isArray(upstream.data) ? upstream.data : [];
+    const items = rows.map((r) => ({
+      title: r.title || '',
+      size: r.size || 0,
+      download: r.magnet_link || '',
+      seeders: r.seed_count || 0,
+      peers: r.peer_count || 0,
+      imdbid: r.imdb || '',
+      details: r.details || '',
+      category: r.category || '',
+    })).filter((r) => r.download);
+
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    return res.status(200).send(torznabRssXml(items));
+  } catch (err) {
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    return res.status(502).send(`<?xml version="1.0" encoding="UTF-8"?><error code="500" description="${xmlEscape(err.message || 'upstream_error')}" />`);
+  }
 });
 
 // â”€â”€â”€ Inicia servidor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
