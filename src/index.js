@@ -174,10 +174,13 @@ async function handleStream(type, id, cfg) {
 
   // Cache hit
   const cached = cfg.cache ? cache.getStreams(type, id) : null;
-  if (cached) {
+  if (Array.isArray(cached) && cached.length > 0) {
     console.log('[Dubra] Cache hit â€”', cached.length, 'streams');
     if (cfg.prefetch && type === 'series' && season && episode) prefetchNext(imdbId, season, episode, cfg);
     return { streams: cached };
+  }
+  if (Array.isArray(cached) && cached.length === 0) {
+    console.log('[Dubra] Cache vazio detectado, reconsultando fontes.');
   }
 
   // Busca tÃ­tulo PT-BR via TMDB
@@ -193,7 +196,9 @@ async function handleStream(type, id, cfg) {
   }
 
   // Cache
-  if (cfg.cache) cache.setStreams(type, id, streams, isActive(titleInfo));
+  if (cfg.cache && Array.isArray(streams) && streams.length > 0) {
+    cache.setStreams(type, id, streams, isActive(titleInfo));
+  }
 
   return { streams };
 }
@@ -366,7 +371,8 @@ function isLocalReq(req) {
   return ip.includes('127.0.0.1') || ip.includes('::1') || host.startsWith('localhost') || host.startsWith('127.0.0.1');
 }
 
-function diagnosticsEnabled(req) {
+function diagnosticsEnabled(req, cfg) {
+  if (cfg && cfg.debug === true) return true;
   if (String(process.env.ENABLE_DIAGNOSTICS || '').toLowerCase() === 'true') return true;
   return isLocalReq(req);
 }
@@ -492,13 +498,16 @@ app.post('/debrid-token', rateLimit(60 * 1000, 40), (req, res) => {
   res.json({ ok: true, ref: out.ref, ttlSec: out.ttlSec });
 });
 
-app.get('/scrapers-test', async (req, res) => {
-  if (!diagnosticsEnabled(req)) return res.status(404).json({ ok: false });
+app.get(/^(?:\/(.*))?\/scrapers-test$/, async (req, res) => {
+  const configPathFromRoute = req.params[0] ? ('/' + req.params[0]) : '';
+  const configPathFromQuery = req.query.configPath ? String(req.query.configPath) : '';
+  const configPath = configPathFromRoute || configPathFromQuery;
+  const cfg = parseConfig(configPath);
+  if (!diagnosticsEnabled(req, cfg)) return res.status(404).json({ ok: false });
   const imdbId = req.query.imdb || 'tt0133093';
   const type = req.query.type === 'series' ? 'series' : 'movie';
   const season = req.query.season ? parseInt(req.query.season, 10) : null;
   const episode = req.query.episode ? parseInt(req.query.episode, 10) : null;
-  const cfg = parseConfig(req.query.configPath ? String(req.query.configPath) : '');
   const titleInfo = await getTitleInfo(imdbId, type);
 
   const tests = [
