@@ -12,7 +12,6 @@ const ENDPOINTS = {
   BrazucaTorrents: 'https://94c8cb9f702d-brazuca-torrents.baby-beamup.club/manifest.json',
   BeTor: 'https://catalogo.betor.top/',
   ThepirataFilmes: 'https://www.thepiratafilmes.online/',
-  Indexer: 'https://vlambdas.oci.darklyn.online/indexers',
   TorrentsDB: 'https://torrentsdb.com/',
 };
 

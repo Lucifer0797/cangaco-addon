@@ -16,12 +16,11 @@ Addon para Stremio/Nuvio focado em torrents com áudio PT-BR (dublado/dual).
 | Torrentio Brazuca | API | Principal |
 | Brazuca Torrents | API | Conteúdo BR |
 | BeTor | Prowlarr | Conteúdo BR |
-| Torrent Indexer | API | BluDV, Comando, Starck, TorrentDosFilmes, VacaTorrent |
 | TorrentsDB | API | Fallback secundário (fonte mista) |
 
 ## 3) Regra de idioma
 
-- Fontes BR (Brazuca, BeTor, Indexer e derivados BR): filtro mais leve.
+- Fontes BR (Brazuca, BeTor e ThepirataFilmes): filtro mais leve.
 - Fontes mistas (Torrentio/TorrentsDB): filtro PT-BR quando `Idioma original` estiver desligado.
 
 ## 4) Segurança (importante)
@@ -55,7 +54,6 @@ URLs locais:
 | `ENABLE_DIAGNOSTICS` | nao | Liga diagnóstico global (`/scrapers-test`) | `false` |
 | `TMDB_API_KEY` | nao | Chave TMDB para metadados (título/idioma) | vazio |
 | `BRAZUCA_URL` | nao | URL base do scraper Brazuca | padrão interno |
-| `TORRENT_INDEXER_URL` | nao | URL base do scraper Torrent Indexer | instância pública |
 | `TORRENTSDB_URL` | nao | URL base do TorrentsDB | `https://torrentsdb.com` |
 | `PROWLARR_URL` | sim para BeTor | URL pública do seu Prowlarr | vazio |
 | `PROWLARR_API_KEY` | sim para BeTor | API key do Prowlarr | vazio |

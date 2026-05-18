@@ -27,7 +27,6 @@ const DEFAULTS = {
     thepirata: true,
     torrentio: true,
     brazuca:   true,
-    indexer:   true,
     torrentsdb:false,
   },
   allowOriginal: false,
@@ -117,14 +116,13 @@ function parseConfig(urlPath) {
       continue;
     }
 
-    // sources~betor,thepirata,torrentio,brazuca,indexer,torrentsdb
+    // sources~betor,thepirata,torrentio,brazuca,torrentsdb
     if (seg.startsWith('sources~') || seg.startsWith('sources-')) {
       const vals = seg.slice(8).split(',').filter(Boolean);
       cfg.sources.betor     = vals.includes('betor');
       cfg.sources.thepirata = vals.includes('thepirata') || vals.includes('betor');
       cfg.sources.torrentio = vals.includes('torrentio');
       cfg.sources.brazuca   = vals.includes('brazuca');
-      cfg.sources.indexer   = vals.includes('indexer');
       cfg.sources.torrentsdb = vals.includes('torrentsdb');
       continue;
     }

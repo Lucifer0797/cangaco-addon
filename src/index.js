@@ -23,7 +23,6 @@ const { configurePage }     = require('./configure');
 
 const torrentio    = require('./scrapers/torrentio');
 const brazuca      = require('./scrapers/brazuca');
-const indexer      = require('./scrapers/indexer');
 const betor        = require('./scrapers/betor');
 const thepirata    = require('./scrapers/thepirata');
 const torrentsdb   = require('./scrapers/torrentsdb');
@@ -68,7 +67,6 @@ function buildRescueConfig(cfg) {
     thepirata: true,
     torrentio: true,
     brazuca: true,
-    indexer: true,
     torrentsdb: true,
   };
   next.timeout = Math.max(8000, Number(next.timeout || 0));
@@ -223,9 +221,6 @@ async function fetchAll(imdbId, type, season, episode, titleInfo, cfg) {
   }
   if (cfg.sources.thepirata) {
     sourceFns.push(thepirata.getStreams(imdbId, type, season, episode, titleInfo, cfg));
-  }
-  if (cfg.sources.indexer) {
-    sourceFns.push(indexer.getStreams(titleInfo, type, season, episode, cfg));
   }
   if (!sourceFns.length) return [];
 
@@ -570,7 +565,6 @@ app.get(/^(?:\/(.*))?\/scrapers-test$/, async (req, res) => {
     { name: 'brazuca', run: () => brazuca.getStreams(imdbId, type, season, episode, cfg) },
     { name: 'betor', run: () => betor.getStreams(imdbId, type, season, episode, titleInfo, cfg) },
     { name: 'thepirata', run: () => thepirata.getStreams(imdbId, type, season, episode, titleInfo, cfg) },
-    { name: 'indexer', run: () => indexer.getStreams(titleInfo, type, season, episode, cfg) },
     { name: 'torrentsdb', run: () => torrentsdb.getStreams(imdbId, type, season, episode, cfg) },
   ];
 
