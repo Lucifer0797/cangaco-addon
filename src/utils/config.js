@@ -24,6 +24,7 @@ const DEFAULTS = {
   timeout: 8000,
   sources: {
     betor:     true,
+    thepirata: false,
     torrentio: true,
     brazuca:   true,
     indexer:   true,
@@ -116,10 +117,11 @@ function parseConfig(urlPath) {
       continue;
     }
 
-    // sources~betor,torrentio,brazuca,indexer,torrentsdb
+    // sources~betor,thepirata,torrentio,brazuca,indexer,torrentsdb
     if (seg.startsWith('sources~') || seg.startsWith('sources-')) {
       const vals = seg.slice(8).split(',').filter(Boolean);
       cfg.sources.betor     = vals.includes('betor');
+      cfg.sources.thepirata = vals.includes('thepirata');
       cfg.sources.torrentio = vals.includes('torrentio');
       cfg.sources.brazuca   = vals.includes('brazuca');
       cfg.sources.indexer   = vals.includes('indexer');

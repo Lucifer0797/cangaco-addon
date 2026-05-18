@@ -121,6 +121,7 @@ function configurePage(baseUrl) {
         <div class="lbl">Ativar / desativar</div>
         <div class="card">
           <div class="row"><div><div class="rn">BeTor</div><div class="rs">Catálogo BeTor PT-BR por IMDb e título</div></div><label class="tog"><input type="checkbox" id="src-betor" checked><span class="togslider"></span></label></div>
+          <div class="row"><div><div class="rn">ThepirataFilmes</div><div class="rs">Prowlarr dedicado (teste separado)</div></div><label class="tog"><input type="checkbox" id="src-thepirata"><span class="togslider"></span></label></div>
           <div class="row"><div><div class="rn">Torrentio Brazuca</div><div class="rs">Maior cobertura PT-BR</div></div><label class="tog"><input type="checkbox" id="src-torrentio" checked><span class="togslider"></span></label></div>
           <div class="row"><div><div class="rn">Brazuca Torrents</div><div class="rs">ApacheTorrent, RedeTorrent, VacaTorrent</div></div><label class="tog"><input type="checkbox" id="src-brazuca" checked><span class="togslider"></span></label></div>
           <div class="row"><div><div class="rn">Torrent Indexer</div><div class="rs">BluDV, Comando, Starck</div></div><label class="tog"><input type="checkbox" id="src-indexer" checked><span class="togslider"></span></label></div>
@@ -358,7 +359,7 @@ function configurePage(baseUrl) {
         fetch(BASE_URL + "/status").then((r) => r.json()).then((data) => {
           if (!data || !data.health) return;
           const grid = document.getElementById("health-grid");
-          const srcs = [["Torrentio","Torrentio"],["BrazucaTorrents","Brazuca"],["BeTor","BeTor"],["Indexer","Indexer"],["TorrentsDB","TorrentsDB"]];
+          const srcs = [["Torrentio","Torrentio"],["BrazucaTorrents","Brazuca"],["BeTor","BeTor"],["ThepirataFilmes","ThepirataFilmes"],["Indexer","Indexer"],["TorrentsDB","TorrentsDB"]];
           grid.innerHTML = srcs.map((p) => {
             const h = data.health[p[0]];
             const st = h && h.state ? h.state : (h && h.online ? "online" : "unstable");
@@ -407,7 +408,7 @@ function configurePage(baseUrl) {
         const lt = document.getElementById("r2").value;
         const to = document.getElementById("r3").value;
 
-        const activeSrc = ["betor", "torrentio", "brazuca", "indexer", "torrentsdb"]
+        const activeSrc = ["betor", "thepirata", "torrentio", "brazuca", "indexer", "torrentsdb"]
           .filter((k) => document.getElementById("src-" + k).checked);
 
         let path = "";
@@ -451,7 +452,7 @@ function configurePage(baseUrl) {
             buildUrl();
           });
         });
-        ["betor","torrentio","brazuca","indexer","torrentsdb"].forEach((k) => {
+        ["betor","thepirata","torrentio","brazuca","indexer","torrentsdb"].forEach((k) => {
           document.getElementById("src-" + k).addEventListener("change", buildUrl);
         });
         ["opt-cache","opt-prefetch","opt-dedupsize","opt-original","opt-debug","sel-behavior","sel-sort"].forEach((id) => {
