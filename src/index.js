@@ -25,6 +25,7 @@ const torrentio    = require('./scrapers/torrentio');
 const brazuca      = require('./scrapers/brazuca');
 const indexer      = require('./scrapers/indexer');
 const betor        = require('./scrapers/betor');
+const thepirata    = require('./scrapers/thepirata');
 const torrentsdb   = require('./scrapers/torrentsdb');
 
 // â”€â”€â”€ Manifest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -64,6 +65,7 @@ function buildRescueConfig(cfg) {
   next.srcOrder = ['remux', 'bluray', 'webdl', 'webrip', 'bdrip', 'hdrip', 'hdtv', 'dvdrip', 'cam'];
   next.sources = {
     betor: true,
+    thepirata: false,
     torrentio: true,
     brazuca: true,
     indexer: true,
@@ -128,7 +130,7 @@ function applyFormatter(streams, cfg) {
 
   return streams.map((s) => {
     const title = cleanTitle(s._title || s.name || '');
-    const source = String(s._source || 'Fonte');
+    const source = 'Dubra';
     const res = (extractResolution(title) || '').toUpperCase();
     const srcRaw = extractSource(title) || '';
     const src = srcRaw ? srcRaw.toUpperCase().replace('WEBDL', 'WEB-DL') : '';
@@ -206,7 +208,7 @@ async function handleStream(type, id, cfg) {
 // â”€â”€â”€ Busca principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function fetchAll(imdbId, type, season, episode, titleInfo, cfg) {
-  const softPtSources = new Set(['BrazucaTorrents', 'BeTor', 'BluDV', 'Comando', 'StarckFilmes', 'TorrentDosFilmes', 'RedeTorrent', 'VacaTorrent']);
+  const softPtSources = new Set(['BrazucaTorrents', 'BeTor', 'ThepirataFilmes', 'BluDV', 'Comando', 'StarckFilmes', 'TorrentDosFilmes', 'RedeTorrent', 'VacaTorrent']);
 
   const sourceFns = [];
 
@@ -218,6 +220,9 @@ async function fetchAll(imdbId, type, season, episode, titleInfo, cfg) {
   }
   if (cfg.sources.betor) {
     sourceFns.push(betor.getStreams(imdbId, type, season, episode, titleInfo, cfg));
+  }
+  if (cfg.sources.thepirata) {
+    sourceFns.push(thepirata.getStreams(imdbId, type, season, episode, titleInfo, cfg));
   }
   if (cfg.sources.indexer) {
     sourceFns.push(indexer.getStreams(titleInfo, type, season, episode, cfg));
@@ -564,6 +569,7 @@ app.get(/^(?:\/(.*))?\/scrapers-test$/, async (req, res) => {
     { name: 'torrentio', run: () => torrentio.getStreams(imdbId, type, season, episode, cfg) },
     { name: 'brazuca', run: () => brazuca.getStreams(imdbId, type, season, episode, cfg) },
     { name: 'betor', run: () => betor.getStreams(imdbId, type, season, episode, titleInfo, cfg) },
+    { name: 'thepirata', run: () => thepirata.getStreams(imdbId, type, season, episode, titleInfo, cfg) },
     { name: 'indexer', run: () => indexer.getStreams(titleInfo, type, season, episode, cfg) },
     { name: 'torrentsdb', run: () => torrentsdb.getStreams(imdbId, type, season, episode, cfg) },
   ];
